@@ -2,9 +2,11 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public class MovingObject : MonoBehaviour
+public abstract class MovingObject : MonoBehaviour
 {
 	// ══════════════════════════════════════════════════════════════ PUBLICS ════
+	// the layer in which the collisions will be checked
+	public LayerMask blockingLayer;
 	// determines if the object is moving
 	public bool isMoving = false;
 	// the current cell destination
@@ -15,60 +17,96 @@ public class MovingObject : MonoBehaviour
 	public float movementSpeed = 3f;
 	// delay to use before any call to iTween
 	public float iTweenDelay = 0f;
-	// max distance in which the object can move
-	public int movementPoints = 0;
-	// max action points the object can use
-	public int actionPoints = 0;
-	// prefab to draw movement range possibilities
-	public MovementCell MovementCellPrefab;
 	// ═══════════════════════════════════════════════════════════ PROPERTIES ════
-	List<MovementCell> m_linkedMovementCells = new List<MovementCell> ();
-	public List<MovementCell> LinkedMovementCells { get { return m_linkedMovementCells; } }
+	protected Vector2 m_coordinate;
+	public Vector2 Coordinate { get { return Utility.Vector2Round (transform.position); } }
 	// ═════════════════════════════════════════════════════════════ PRIVATES ════
-	// list that stores the movement path positions
-	List<MovementCell> m_movementPath = new List<MovementCell> ();
-	// the current cell of the moving object
-	MovementCell m_currentCell;
-
+	BoxCollider2D m_boxCollider;
 	// ══════════════════════════════════════════════════════════════ METHODS ════
 	// called when the script instance is being loaded
 	protected virtual void Awake ()
 	{
-		movementPoints = 1;
-		actionPoints = 1;
+		m_boxCollider = GetComponent<BoxCollider2D> ();
 	}
 
 	// called on the frame when a script is enabled just before any of the Update
 	// methods is called the first time
 	protected virtual void Start ()
 	{
-		// TODO: do something
+		// TODO: initialize values
+	}
+
+	protected virtual void Update ()
+	{
+		// TODO: execute per frame common behavior
+	}
+
+	protected virtual bool AttemptMove<T> (Vector2 direction, float delayTime = 0f) where T : Component
+	{
+		RaycastHit2D hit;
+		bool canMove = Move (direction, out hit, delayTime);
+
+		if (hit.transform == null)
+		{
+			return true;
+		}
+
+		T hitComponent = hit.transform.GetComponent<T> ();
+
+		if (!canMove && hitComponent != null)
+		{
+			OnCantMove (hitComponent);
+		}
+
+		return canMove;
 	}
 
 	// move the game object in a direction
-	protected IEnumerator Move ()
+	protected bool Move (Vector2 direction, out RaycastHit2D hit, float delayTime)
 	{
-		if (isMoving)
+		Vector2 start = transform.position;
+		Vector2 end = start + direction;
+
+		// assure that the casted rays will not hit the collider of the object that is going to be moved
+		m_boxCollider.enabled = false;
+
+		// cast a line from the start point to the end point checking collisions in the blockingLayer
+		hit = Physics2D.Linecast (start, end, blockingLayer);
+
+		m_boxCollider.enabled = true;
+
+		if (hit.transform == null)
 		{
-			yield return null;
+			// init the tween that will move the GameObject
+			StartCoroutine (MoveRoutine (end, delayTime));
+			return true;
 		}
 
-		foreach (MovementCell targetCell in m_movementPath)
-		{
-			yield return StartCoroutine (MoveRoutine (targetCell.Coordinate));
-		}
-
-		CleanPath ();
+		// the GameObject can't move
+		return false;
 	}
 
-	// the coroutine that make the object moves using an iTween animation
-	protected virtual IEnumerator MoveRoutine (Vector2 destinationPos, float delayTime = 0f)
+	protected void ForceMove (Vector2 direction, float delayTime = 0.25f)
 	{
+		Vector2 start = transform.position;
+		Vector2 end = start + direction;
+
+		StartCoroutine (MoveRoutine (end, delayTime));
+	}
+
+	// coroutine used to move the player
+	protected IEnumerator MoveRoutine (Vector2 destinationPos, float delayTime)
+	{
+		// we are moving
 		isMoving = true;
+
+		// set the destination to the destinationPos being passed into the coroutine
 		destination = destinationPos;
 
+		// pause the coroutine for a brief periof
 		yield return new WaitForSeconds (delayTime);
 
+		// move the player toward the destinationPos using the easeType and moveSpeed variables
 		iTween.MoveTo (gameObject, iTween.Hash (
 			"x", destinationPos.x,
 			"y", destinationPos.y,
@@ -77,110 +115,20 @@ public class MovingObject : MonoBehaviour
 			"speed", movementSpeed
 		));
 
-		while (Vector2.Distance (destinationPos, transform.position) > 0.01f)
+		while (Vector2.Distance (destinationPos, transform.position) > float.Epsilon)
 		{
 			yield return null;
 		}
 
+		// stop the iTween immediately
 		iTween.Stop (gameObject);
+
+		// set the player position to the destination explicitly
 		transform.position = destinationPos;
+
+		// we are not moving
 		isMoving = false;
 	}
 
-	public void DrawMovementCells ()
-	{
-		if (MovementCellPrefab != null)
-		{
-			for (int i = movementPoints; i >= -movementPoints; i--)
-			{
-				for (int j = movementPoints; j >= -movementPoints; j--)
-				{
-					int sum = Mathf.Abs (i) + Mathf.Abs (j);
-					if (sum != 0 && sum <= movementPoints)
-					{
-						GameObject movementCellInstance = Instantiate (MovementCellPrefab.transform.gameObject,
-							transform.position + new Vector3 (j, i, 0f), Quaternion.identity, transform);
-						movementCellInstance.name = "" + j + "-" + i;
-						MovementCell movementCell = movementCellInstance.GetComponent<MovementCell> ();
-						m_linkedMovementCells.Add (movementCell);
-						movementCell.SetSeed (this);
-					}
-				}
-			}
-		}
-	}
-
-	// method that looks for the shortest path to the target cell (that's the path
-	// that will be used to move this object)
-	public void FindPathTo (MovementCell targetCell)
-	{
-		if (isMoving)
-		{
-			return;
-		}
-
-		m_movementPath = new List<MovementCell> ();
-		Vector2 targetDirection = targetCell.Coordinate - Utility.Vector2Round (transform.position);
-		int stepsToTarget = Mathf.CeilToInt (targetDirection.magnitude);
-		int doneSteps = 0;
-		if (stepsToTarget <= movementPoints)
-		{
-			MovementCell pathStep = targetCell;
-
-			while (doneSteps < stepsToTarget)
-			{
-				doneSteps++;
-				m_movementPath.Add (pathStep);
-
-				Vector2 direction;
-				if (Mathf.Abs (targetDirection.x) >= Mathf.Abs (targetDirection.y))
-				{
-					// start the path in the X axis
-					direction = new Vector2 (Mathf.Round (-targetDirection.normalized.x), 0f);
-				}
-				else
-				{
-					// start the path in the Y axis
-					direction = new Vector2 (0f, Mathf.Round (-targetDirection.normalized.y));
-				}
-
-				pathStep = pathStep.FindNeighborAt (direction);
-
-				if (pathStep)
-				{
-					targetDirection = pathStep.Coordinate - Utility.Vector2Round (transform.position);
-				}
-			}
-		}
-
-		m_movementPath.Reverse ();
-		foreach (MovementCell step in m_movementPath)
-		{
-			step.TogglePathMark (true);
-		}
-	}
-
-	public void CleanPath ()
-	{
-		if (isMoving)
-		{
-			return;
-		}
-
-		foreach (MovementCell step in m_movementPath)
-		{
-			step.TogglePathMark (false);
-		}
-		m_movementPath.Clear ();
-	}
-
-	public void MoveInPath ()
-	{
-		if (isMoving)
-		{
-			return;
-		}
-
-		StartCoroutine (Move ());
-	}
+	protected abstract void OnCantMove<T> (T component) where T : Component;
 }
