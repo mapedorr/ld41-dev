@@ -22,6 +22,7 @@ public class Enemy : MovingObject
 	List<Floor> m_viewZone = new List<Floor> ();
 	Color m_defaultWalkableColor;
 	protected GameManager m_gameManager;
+	PatrolType m_patrolType;
 
 	// ══════════════════════════════════════════════════════════════ METHODS ════
 	protected override void Awake ()
@@ -35,12 +36,14 @@ public class Enemy : MovingObject
 
 		if (patrolContainer != null && patrolContainer.childCount > 0)
 		{
+			m_patrolType = patrolContainer.GetComponent<Patrol> ().patrolType;
+
 			for (int i = 0; i < patrolContainer.childCount; i++)
 			{
 				m_patrolCoordinates.Add (Utility.Vector2Round (patrolContainer.GetChild (i).position));
 			}
 
-			if (!closedPattern)
+			if (!closedPattern && m_patrolType == PatrolType.GO)
 			{
 				// add to the list the spots in reverse till the initial position to close
 				// the patrol pattern
@@ -135,9 +138,17 @@ public class Enemy : MovingObject
 			}
 
 			m_currentSpotTarget = spotCoordinate;
-			yield return base.MoveRoutine (spotCoordinate,
-				(m_firstPatrol) ? startWaitTime : waitTimeBeforeNext);
-			m_firstPatrol = false;
+
+			if (m_patrolType == PatrolType.GO)
+			{
+				yield return base.MoveRoutine (spotCoordinate,
+					(m_firstPatrol) ? startWaitTime : waitTimeBeforeNext);
+				m_firstPatrol = false;
+			}
+			else if (m_patrolType == PatrolType.WATCH)
+			{
+				yield return new WaitForSeconds (waitTimeBeforeNext);
+			}
 		}
 
 		StartCoroutine (StartPatrolling ());
