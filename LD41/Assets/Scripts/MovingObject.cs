@@ -92,12 +92,12 @@ public abstract class MovingObject : MonoBehaviour
 	// move the game object in a direction regardless if there is an obstacle in
 	// its path (added because some levels might require the player to push or
 	// pull objects used to push other objects)
-	protected void ForceMove (Vector2 direction, float delayTime = 0.25f)
+	protected IEnumerator ForceMove (Vector2 direction, float delayTime = 0.25f)
 	{
 		Vector2 start = transform.position;
 		Vector2 end = start + direction;
 
-		StartCoroutine (MoveRoutine (end, delayTime));
+		yield return StartCoroutine (MoveRoutine (end, delayTime));
 	}
 
 	// coroutine used to move the player

@@ -17,12 +17,13 @@ public class GameManager : MonoBehaviour
 	public UnityEvent playLevelEvent;
 	public UnityEvent endLevelEvent;
 	public UnityEvent loseLevelEvent;
-
+	public UnityEvent winLevelEvent;
+	// used to change the appearance of the mouse pointer
 	public Texture2D pointerTexture;
 
 	// ═══════════════════════════════════════════════════════════ PROPERTIES ════
 	// indicates if the player clicked start
-	bool m_hasLevelStarted = true;
+	bool m_hasLevelStarted = false;
 	public bool HasLevelStarted { get { return m_hasLevelStarted; } set { m_hasLevelStarted = value; } }
 
 	// indicates if the player is playing (moving the PC, infiltrating the thing)
@@ -44,6 +45,8 @@ public class GameManager : MonoBehaviour
 	Player m_player;
 	List<Enemy> m_enemies = new List<Enemy> ();
 	bool m_playerDetected = false;
+	int m_achievedGoals = 0;
+	int m_totalGoals = 0;
 
 	// ══════════════════════════════════════════════════════════════ METHODS ════
 	void Awake ()
@@ -91,7 +94,6 @@ public class GameManager : MonoBehaviour
 		}
 
 		m_player.InputEnabled = false;
-		m_player.ResetNeeds ();
 
 		while (!m_hasLevelStarted)
 		{
@@ -128,12 +130,41 @@ public class GameManager : MonoBehaviour
 
 	void StartLevel ()
 	{
+		m_totalGoals = 0;
+		m_achievedGoals = 0;
+
+		// check how many goals should the player achieve in order to enter the exit
+		Goal[] levelGoals = Object.FindObjectsOfType<Goal> ();
+		for (int i = 0; i < levelGoals.Length; i++)
+		{
+			if (levelGoals[i].isExit)
+			{
+				continue;
+			}
+
+			m_totalGoals++;
+		}
+
+		// allow the player move and set needs to their optimal state
 		m_player.InputEnabled = true;
 		m_player.LevelStartTime = Time.fixedTime;
+		m_player.ResetNeeds ();
+
+		// make enemies start patrolling
 		foreach (Enemy enemy in m_enemies)
 		{
 			StartCoroutine (enemy.StartPatrolling ());
 		}
+	}
+
+	public void GoalAchieved ()
+	{
+		m_achievedGoals++;
+	}
+
+	public bool CanEnterExit ()
+	{
+		return m_achievedGoals == m_totalGoals;
 	}
 
 	// end stage after gameplay is complete
@@ -154,7 +185,10 @@ public class GameManager : MonoBehaviour
 
 		if (!m_playerDetected)
 		{
-			// TODO: do something if the player finished the mission successfully
+			if (winLevelEvent != null)
+			{
+				winLevelEvent.Invoke ();
+			}
 		}
 		else
 		{

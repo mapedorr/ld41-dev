@@ -148,7 +148,42 @@ public class Player : MovingObject
 	// object that triggers an action
 	protected override void OnCantMove<T> (T component)
 	{
-		// TODO: set behaviour for collisions with objects with interaction
+		if (component.tag.Equals ("Goal"))
+		{
+			Goal goal = component.GetComponent<Goal> ();
+
+			if (goal.isExit)
+			{
+				if (m_gameManager.CanEnterExit ())
+				{
+					// if all the goals were achieved, then allow the player to enter the
+					// extractio room
+					StartCoroutine (EnterExit (component.transform.position - transform.position));
+				}
+			}
+			else
+			{
+				// TODO: trigger any specific behaviour when the player reaches this common goal
+				component.gameObject.SetActive (false);
+				m_gameManager.GoalAchieved ();
+			}
+		}
+		else if (component.tag.Equals ("Bath"))
+		{
+			SatisfyBaddler ();
+		}
+		else if (component.tag.Equals ("Snacks"))
+		{
+			SatisfyHunger ();
+		}
+	}
+
+	IEnumerator EnterExit (Vector2 destination)
+	{
+		yield return StartCoroutine (ForceMove (destination));
+		yield return new WaitForSeconds (1.5f);
+
+		m_gameManager.IsGameOver = true;
 	}
 
 	// set the PC needs to its default values (the optimal)
@@ -192,11 +227,7 @@ public class Player : MovingObject
 				{
 					// make the PC pee...her baddle needs are satisfied, but think on
 					// the consecuences
-					peeing = true;
-					m_peed = true;
-					movementSpeed = m_defaultMovementSpeed;
-					m_baddlerNeedLvl = m_gameManager.NeedIndicators;
-					m_noBaddlerCount = baddlerCooldown;
+					SatisfyBaddler (true);
 				}
 			}
 
@@ -230,5 +261,29 @@ public class Player : MovingObject
 	bool NotObey ()
 	{
 		return Random.value >= 0.2f;
+	}
+
+	void SatisfyBaddler (bool badWay = false)
+	{
+		if (badWay)
+		{
+			peeing = true;
+			m_peed = true;
+		}
+
+		movementSpeed = m_defaultMovementSpeed;
+		m_baddlerNeedLvl = m_gameManager.NeedIndicators;
+		m_noBaddlerCount = baddlerCooldown;
+
+		UpdateNeedIndicators ();
+	}
+
+	void SatisfyHunger ()
+	{
+		movementSpeed = m_defaultMovementSpeed;
+		m_hungerNeedLvl = m_gameManager.NeedIndicators;
+		m_noHungerCount = hungerCooldown;
+
+		UpdateNeedIndicators ();
 	}
 }
