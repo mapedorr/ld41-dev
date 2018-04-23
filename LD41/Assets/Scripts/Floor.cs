@@ -28,6 +28,8 @@ public class Floor : MonoBehaviour
     }
   }
 
+  // change the color of the floor to something that indicates the player the zone
+  // that it's being watched by the enemy
   public void SetColor (Color newColor)
   {
     if (m_spriteRenderer != null)
@@ -36,6 +38,7 @@ public class Floor : MonoBehaviour
     }
   }
 
+  // set the color of this piece of floor to its default
   public void ResetColor ()
   {
     if (m_spriteRenderer != null)
@@ -44,6 +47,8 @@ public class Floor : MonoBehaviour
     }
   }
 
+  // check if the player is overlaping this piece of floor so the enemy watching
+  // it can trigger the game over condition
   public bool CheckPlayerOverlap ()
   {
     if (m_boxCollider == null)
@@ -51,7 +56,7 @@ public class Floor : MonoBehaviour
       return false;
     }
 
-    Collider2D[] result = new Collider2D[2];
+    Collider2D[] result = new Collider2D[10];
     ContactFilter2D x = new ContactFilter2D ();
     x.layerMask = playerLayer;
     int hits = m_boxCollider.OverlapCollider (x, result);
@@ -65,6 +70,12 @@ public class Floor : MonoBehaviour
           if (result[i].GetComponent<Player> () != null)
           {
             // the player is in the zone of view
+            return true;
+          }
+          else if (result[i].tag.Equals ("Trail"))
+          {
+            // if the enemy see a trail of the player...the mission is fucked!
+            // i.e. pee
             return true;
           }
         }

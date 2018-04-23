@@ -22,11 +22,14 @@ public abstract class MovingObject : MonoBehaviour
 	public Vector2 Coordinate { get { return Utility.Vector2Round (transform.position); } }
 	// ═════════════════════════════════════════════════════════════ PRIVATES ════
 	BoxCollider2D m_boxCollider;
+	protected GameManager m_gameManager;
+
 	// ══════════════════════════════════════════════════════════════ METHODS ════
 	// called when the script instance is being loaded
 	protected virtual void Awake ()
 	{
 		m_boxCollider = GetComponent<BoxCollider2D> ();
+		m_gameManager = Object.FindObjectOfType<GameManager> ().GetComponent<GameManager> ();
 	}
 
 	// called on the frame when a script is enabled just before any of the Update
@@ -86,6 +89,9 @@ public abstract class MovingObject : MonoBehaviour
 		return false;
 	}
 
+	// move the game object in a direction regardless if there is an obstacle in
+	// its path (added because some levels might require the player to push or
+	// pull objects used to push other objects)
 	protected void ForceMove (Vector2 direction, float delayTime = 0.25f)
 	{
 		Vector2 start = transform.position;
@@ -97,38 +103,51 @@ public abstract class MovingObject : MonoBehaviour
 	// coroutine used to move the player
 	protected IEnumerator MoveRoutine (Vector2 destinationPos, float delayTime)
 	{
-		// we are moving
-		isMoving = true;
-
-		// set the destination to the destinationPos being passed into the coroutine
-		destination = destinationPos;
-
-		// pause the coroutine for a brief periof
-		yield return new WaitForSeconds (delayTime);
-
-		// move the player toward the destinationPos using the easeType and moveSpeed variables
-		iTween.MoveTo (gameObject, iTween.Hash (
-			"x", destinationPos.x,
-			"y", destinationPos.y,
-			"delay", iTweenDelay,
-			"easetype", easeType,
-			"speed", movementSpeed
-		));
-
-		while (Vector2.Distance (destinationPos, transform.position) > float.Epsilon)
+		if (!m_gameManager.IsGameOver)
 		{
-			yield return null;
+			// set moving to true in order to prevent some behaviours
+			isMoving = true;
+
+			// set the destination to the destinationPos being passed into the coroutine
+			destination = destinationPos;
+
+			// pause the coroutine before the movement starts
+			yield return new WaitForSeconds (delayTime);
+
+			// move the player toward its destination
+			iTween.MoveTo (gameObject, iTween.Hash (
+				"x", destinationPos.x,
+				"y", destinationPos.y,
+				"delay", iTweenDelay,
+				"easetype", easeType,
+				"speed", movementSpeed
+			));
+
+			// check if the distance to the destination is small enough to finish the
+			// animation
+			while (Vector2.Distance (destinationPos, transform.position) > float.Epsilon)
+			{
+				if (m_gameManager.IsGameOver)
+				{
+					transform.position = destinationPos;
+					break;
+				}
+
+				yield return null;
+			}
+
+			// stop the animation
+			iTween.Stop (gameObject);
+
+			// set the player position to the destination
+			transform.position = destinationPos;
+
+			// set moving to true in order to allow some behaviours
+			isMoving = false;
 		}
-
-		// stop the iTween immediately
-		iTween.Stop (gameObject);
-
-		// set the player position to the destination explicitly
-		transform.position = destinationPos;
-
-		// we are not moving
-		isMoving = false;
 	}
 
+	// method that can be used by classes inheriting from this one in order to
+	// react to specific collisions
 	protected abstract void OnCantMove<T> (T component) where T : Component;
 }

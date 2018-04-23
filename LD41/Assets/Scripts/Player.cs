@@ -5,6 +5,23 @@ using UnityEngine;
 public class Player : MovingObject
 {
 	// ══════════════════════════════════════════════════════════════ PUBLICS ════
+	public GameObject hungerIndicatorsHolder;
+	public GameObject baddlerIndicatorsHolder;
+	// how many seconds should pass each times the needs change
+	public float needsDecreaseRate = 60f;
+	// decrease rate of the Hunger need
+	public float hungerDR;
+	// decrease rate of the Baddler need
+	public float baddlerDR;
+	public bool peeing;
+	public GameObject peeMarkPrefab;
+	// the following to will be used after the PC satisfies the related need. one
+	// can think of them as the hours passed between each one
+	//   - indicates how many ticks should pass before hunger starts decreasing again
+	public int hungerCooldown = 4;
+	//   - indicates how many ticks should pass before baddler starts decreasing again
+	public int baddlerCooldown = 2;
+
 	// ═══════════════════════════════════════════════════════════ PROPERTIES ════
 	float m_h;
 	public float H { get { return m_h; } }
@@ -14,12 +31,37 @@ public class Player : MovingObject
 
 	bool m_inputEnabled;
 	public bool InputEnabled { get { return m_inputEnabled; } set { m_inputEnabled = value; } }
+
+	private float m_levelStartTime;
+	public float LevelStartTime { get { return m_levelStartTime; } set { m_levelStartTime = value; } }
+
 	// ═════════════════════════════════════════════════════════════ PRIVATES ════
+	float m_hungerNeedLvl;
+	float m_baddlerNeedLvl;
+	NeedIndicator[] m_hungerIndicators;
+	NeedIndicator[] m_baddlerIndicators;
+	bool m_peed = false;
+	float m_defaultMovementSpeed;
+	List<GameObject> m_peeTrace = new List<GameObject> ();
+	int m_noHungerCount;
+	int m_noBaddlerCount;
 
 	// ══════════════════════════════════════════════════════════════ METHODS ════
 	protected override void Awake ()
 	{
 		base.Awake ();
+
+		m_defaultMovementSpeed = movementSpeed;
+
+		if (hungerIndicatorsHolder)
+		{
+			m_hungerIndicators = hungerIndicatorsHolder.GetComponentsInChildren<NeedIndicator> ();
+		}
+
+		if (baddlerIndicatorsHolder != null)
+		{
+			m_baddlerIndicators = baddlerIndicatorsHolder.GetComponentsInChildren<NeedIndicator> ();
+		}
 	}
 
 	protected override void Start ()
@@ -32,10 +74,33 @@ public class Player : MovingObject
 	{
 		base.Update ();
 
-		// if (!GameManager.instance.playersTurn) return;
 		if (isMoving)
 		{
 			return;
+		}
+
+		if (peeing && peeMarkPrefab)
+		{
+			bool putMark = true;
+			// pee over the tile where the player stands
+			// look if there's a pee mark on the current tile
+			foreach (GameObject peeMark in m_peeTrace)
+			{
+				if (peeMark.transform.position == transform.position)
+				{
+					putMark = false;
+				}
+			}
+
+			if (putMark)
+			{
+				m_peeTrace.Add (Instantiate (peeMarkPrefab, transform.position, Quaternion.identity));
+				if (m_peeTrace.Count == 3)
+				{
+					peeing = false;
+					m_peeTrace.Clear ();
+				}
+			}
 		}
 
 		if (m_inputEnabled)
@@ -57,7 +122,24 @@ public class Player : MovingObject
 
 		if (m_h != 0 || m_v != 0)
 		{
-			// we expect to interact with a Wall ()
+			// maybe crates or other things might appear later, wee need to check
+			// collisions against those objects in orther to trigger specific
+			// behaviours
+
+			if (m_hungerNeedLvl <= 0)
+			{
+				// the PC might not follow orders if he is hungry
+				if (NotObey ())
+				{
+					return;
+				}
+				else
+				{
+					// ...and although she follows orders, her speed will be affected
+					movementSpeed = m_defaultMovementSpeed * Random.Range (0.1f, 0.8f);
+				}
+			}
+
 			AttemptMove<Component> (new Vector2 (m_h, m_v));
 		}
 	}
@@ -66,7 +148,87 @@ public class Player : MovingObject
 	// object that triggers an action
 	protected override void OnCantMove<T> (T component)
 	{
-		Debug.Log ("Yes? " + component.name);
 		// TODO: set behaviour for collisions with objects with interaction
+	}
+
+	// set the PC needs to its default values (the optimal)
+	public void ResetNeeds ()
+	{
+		// set the needs to its optimal condition
+		m_baddlerNeedLvl = m_gameManager.NeedIndicators;
+		m_hungerNeedLvl = m_gameManager.NeedIndicators;
+
+		m_noHungerCount = 0;
+		m_noBaddlerCount = 0;
+
+		// update the UI so the player can see its agent healthy
+		UpdateNeedIndicators ();
+
+		StartCoroutine (DecreaseNeeds ());
+	}
+
+	IEnumerator DecreaseNeeds ()
+	{
+		while (!m_gameManager.IsGameOver)
+		{
+			yield return new WaitForSeconds (needsDecreaseRate);
+
+			if (m_noHungerCount-- <= 0)
+			{
+				m_hungerNeedLvl -= hungerDR;
+			}
+
+			if (m_noBaddlerCount-- <= 0)
+			{
+				m_baddlerNeedLvl -= baddlerDR;
+			}
+
+			if (m_baddlerNeedLvl <= 0)
+			{
+				// you can walk as normal when you want to pee
+				movementSpeed = 1f;
+
+				if (m_baddlerNeedLvl <= -2f)
+				{
+					// make the PC pee...her baddle needs are satisfied, but think on
+					// the consecuences
+					peeing = true;
+					m_peed = true;
+					movementSpeed = m_defaultMovementSpeed;
+					m_baddlerNeedLvl = m_gameManager.NeedIndicators;
+					m_noBaddlerCount = baddlerCooldown;
+				}
+			}
+
+			UpdateNeedIndicators ();
+		}
+	}
+
+	void UpdateNeedIndicators ()
+	{
+		SetNeedIndicatorsTo (m_hungerIndicators, Mathf.CeilToInt (m_hungerNeedLvl));
+		SetNeedIndicatorsTo (m_baddlerIndicators, Mathf.CeilToInt (m_baddlerNeedLvl));
+	}
+
+	// changes the status of the UI indicators for a need based on the level received
+	// as parameter
+	void SetNeedIndicatorsTo (NeedIndicator[] indicators, int level)
+	{
+		for (int i = 0; i < indicators.Length; i++)
+		{
+			if (i <= level - 1)
+			{
+				indicators[i].SetGood (true);
+			}
+			else
+			{
+				indicators[i].SetGood (false);
+			}
+		}
+	}
+
+	bool NotObey ()
+	{
+		return Random.value >= 0.2f;
 	}
 }

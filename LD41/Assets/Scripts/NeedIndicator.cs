@@ -1,31 +1,41 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
 
-public class MovementCell : MonoBehaviour
+public class NeedIndicator : MonoBehaviour
 {
 	// ══════════════════════════════════════════════════════════════ PUBLICS ════
-	public GameObject pathMarkPrefab;
+	public Color goodColor;
+	public Color badColor;
 
 	// ═══════════════════════════════════════════════════════════ PROPERTIES ════
-	// property that returns the coordinate of the movement indicator
-	Vector2 m_coordinate;
-	public Vector2 Coordinate { get { return Utility.Vector2Round (m_coordinate); } }
-
-	// list of MovementIndicator neighbors to this object
-	private List<MovementCell> m_neighbors = new List<MovementCell> ();
-	public List<MovementCell> Neighbors { get { return m_neighbors; } }
+	// TODO: define properties
 	// ═════════════════════════════════════════════════════════════ PRIVATES ════
-	// TODO: define privates
+	Image m_image;
 
 	// ══════════════════════════════════════════════════════════════ METHODS ════
 	void Awake ()
 	{
-		m_coordinate = new Vector2 (transform.position.x, transform.position.y);
+		m_image = GetComponent<Image> ();
 	}
 
-	void Start ()
+	// change the appearance of the indicator to show the player if it is in good
+	// or bad level
+	public void SetGood (bool good)
 	{
-		// TODO: initialize something
+		if (m_image == null)
+		{
+			return;
+		}
+
+		if (good)
+		{
+			m_image.color = goodColor;
+		}
+		else
+		{
+			m_image.color = badColor;
+		}
 	}
 }
