@@ -21,7 +21,7 @@ public abstract class MovingObject : MonoBehaviour
 	protected Vector2 m_coordinate;
 	public Vector2 Coordinate { get { return Utility.Vector2Round (transform.position); } }
 	// ═════════════════════════════════════════════════════════════ PRIVATES ════
-	BoxCollider2D m_boxCollider;
+	protected BoxCollider2D m_boxCollider;
 	protected GameManager m_gameManager;
 
 	// ══════════════════════════════════════════════════════════════ METHODS ════

@@ -1,6 +1,7 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
 
 public class Player : MovingObject
 {
@@ -21,6 +22,8 @@ public class Player : MovingObject
 	public int hungerCooldown = 4;
 	//   - indicates how many ticks should pass before baddler starts decreasing again
 	public int baddlerCooldown = 2;
+	public GameObject cantLeaveUI;
+	public GameObject documentsCountUI;
 
 	// ═══════════════════════════════════════════════════════════ PROPERTIES ════
 	float m_h;
@@ -45,6 +48,7 @@ public class Player : MovingObject
 	List<GameObject> m_peeTrace = new List<GameObject> ();
 	int m_noHungerCount;
 	int m_noBaddlerCount;
+	SpriteRenderer m_sprite;
 
 	// ══════════════════════════════════════════════════════════════ METHODS ════
 	protected override void Awake ()
@@ -52,6 +56,7 @@ public class Player : MovingObject
 		base.Awake ();
 
 		m_defaultMovementSpeed = movementSpeed;
+		m_sprite = GetComponent<SpriteRenderer> ();
 
 		if (hungerIndicatorsHolder)
 		{
@@ -118,13 +123,23 @@ public class Player : MovingObject
 		if (m_h != 0)
 		{
 			m_v = 0;
+			if (m_sprite)
+			{
+				m_sprite.flipX = (m_h < 0) ? false : true;
+			}
 		}
 
 		if (m_h != 0 || m_v != 0)
 		{
-			// maybe crates or other things might appear later, wee need to check
-			// collisions against those objects in orther to trigger specific
-			// behaviours
+			if (cantLeaveUI != null && cantLeaveUI.active)
+			{
+				cantLeaveUI.SetActive (false);
+
+				if (documentsCountUI != null)
+				{
+					documentsCountUI.SetActive (true);
+				}
+			}
 
 			if (m_hungerNeedLvl <= 0)
 			{
@@ -140,6 +155,9 @@ public class Player : MovingObject
 				}
 			}
 
+			// maybe crates or other things might appear later, wee need to check
+			// collisions against those objects in orther to trigger specific
+			// behaviours
 			AttemptMove<Component> (new Vector2 (m_h, m_v));
 		}
 	}
@@ -159,6 +177,22 @@ public class Player : MovingObject
 					// if all the goals were achieved, then allow the player to enter the
 					// extractio room
 					StartCoroutine (EnterExit (component.transform.position - transform.position));
+					if (cantLeaveUI != null)
+					{
+						cantLeaveUI.SetActive (false);
+					}
+
+					if (documentsCountUI != null)
+					{
+						documentsCountUI.SetActive (false);
+					}
+				}
+				else
+				{
+					if (cantLeaveUI != null)
+					{
+						cantLeaveUI.SetActive (true);
+					}
 				}
 			}
 			else
@@ -166,6 +200,12 @@ public class Player : MovingObject
 				// TODO: trigger any specific behaviour when the player reaches this common goal
 				component.gameObject.SetActive (false);
 				m_gameManager.GoalAchieved ();
+
+				if (documentsCountUI != null)
+				{
+					documentsCountUI.GetComponent<Text> ().text = m_gameManager.GetGoalsString ();
+					documentsCountUI.SetActive (true);
+				}
 			}
 		}
 		else if (component.tag.Equals ("Bath"))

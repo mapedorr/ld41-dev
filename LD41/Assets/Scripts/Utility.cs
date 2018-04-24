@@ -18,6 +18,6 @@ public class Utility : MonoBehaviour
 
 	public static Vector3 Vector3Transform (Vector2 source)
 	{
-		return new Vector3 (source.x, source.y, 0f);
+		return new Vector3 (Mathf.Round (source.x), Mathf.Round (source.y), 0f);
 	}
 }

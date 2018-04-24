@@ -7,7 +7,6 @@ using UnityEngine.SceneManagement;
 public class GameManager : MonoBehaviour
 {
 	// ══════════════════════════════════════════════════════════════ PUBLICS ════
-	public static GameManager instance = null;
 	// delay between game stages
 	public float stageDelay = 1f;
 
@@ -51,11 +50,6 @@ public class GameManager : MonoBehaviour
 	// ══════════════════════════════════════════════════════════════ METHODS ════
 	void Awake ()
 	{
-		// apply Singleton pattern
-		// if (instance == null) instance = this;
-		// else if (instance != this) Destroy (gameObject);
-		// DontDestroyOnLoad (gameObject);
-
 		// get components and dependencies
 		m_player = Object.FindObjectOfType<Player> ().GetComponent<Player> ();
 		m_enemies = new List<Enemy> (Object.FindObjectsOfType<Enemy> ());
@@ -159,7 +153,12 @@ public class GameManager : MonoBehaviour
 
 	public void GoalAchieved ()
 	{
-		m_achievedGoals++;
+		++m_achievedGoals;
+	}
+
+	public string GetGoalsString ()
+	{
+		return "Documents: " + m_achievedGoals + " / " + m_totalGoals;
 	}
 
 	public bool CanEnterExit ()
@@ -211,6 +210,12 @@ public class GameManager : MonoBehaviour
 	public void PlayerDetected ()
 	{
 		m_playerDetected = true;
+		StartCoroutine (LoseLevel ());
+	}
+
+	IEnumerator LoseLevel ()
+	{
+		yield return new WaitForSeconds (2f);
 		m_isGameOver = true;
 	}
 

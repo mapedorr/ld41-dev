@@ -1,6 +1,7 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
 
 public class Enemy : MovingObject
 {
@@ -12,6 +13,9 @@ public class Enemy : MovingObject
 	public float viewDistance;
 	public LayerMask walkableLayer;
 	public bool playerOnSight = false;
+	public GameObject viewZonePrefab;
+	public GameObject viewZoneHolder;
+	public GameObject alertUI;
 
 	// ═══════════════════════════════════════════════════════════ PROPERTIES ════
 	// ═════════════════════════════════════════════════════════════ PRIVATES ════
@@ -19,8 +23,8 @@ public class Enemy : MovingObject
 	List<Vector2> m_patrolCoordinates = new List<Vector2> ();
 	bool m_firstPatrol = true;
 	Vector2 m_currentSpotTarget;
-	List<Floor> m_viewZone = new List<Floor> ();
-	Color m_defaultWalkableColor;
+	Vector2 m_currentSpotTargetDir;
+	List<GameObject> m_viewZone2 = new List<GameObject> ();
 	PatrolType m_patrolType;
 
 	// ══════════════════════════════════════════════════════════════ METHODS ════
@@ -54,7 +58,20 @@ public class Enemy : MovingObject
 			}
 
 			m_currentSpotTarget = m_patrolCoordinates[0];
+
+			if (viewZonePrefab != null && viewZoneHolder != null)
+			{
+				// get the direction of the current spot target
+				m_currentSpotTargetDir = (m_currentSpotTarget - Coordinate).normalized;
+				for (int i = 0; i < viewDistance; i++)
+				{
+					Vector3 position = Coordinate + (m_currentSpotTargetDir * (i + 1));
+					m_viewZone2.Add (Instantiate (viewZonePrefab, position, Quaternion.identity, viewZoneHolder.transform));
+					m_viewZone2[i].SetActive (false);
+				}
+			}
 		}
+
 	}
 
 	protected override void Update ()
@@ -68,44 +85,45 @@ public class Enemy : MovingObject
 			return;
 		}
 
+		// hide all the view zone marks
 		DrawViewZone (false);
-		m_viewZone.Clear ();
 
-		RaycastHit2D[] hit = Physics2D.LinecastAll (transform.position,
-			m_currentSpotTarget,
-			walkableLayer);
+		// cast a ray in the direction of "view"
+		RaycastHit2D hit = Physics2D.Raycast (Coordinate + m_currentSpotTargetDir,
+			m_currentSpotTargetDir, Mathf.Infinity, walkableLayer);
 
-		if (hit != null && hit.Length > 0)
+		if (hit != null)
 		{
-			// counter that indicates how many tiles will the enemy watch from all of
-			// the tiles hit by the ray
-			int addedCount = 0;
+			// calculate the amount of tiles the enemy can see based on the obstacles
+			// on its view area
+			int visibleZones = Mathf.FloorToInt (Mathf.Min (viewDistance, Mathf.CeilToInt (hit.distance)));
 
-			// ignore the first hit in the array since it is the tile in which the
-			// enemy is standing
-			for (int i = 1; i < hit.Length; i++)
+			if (visibleZones < viewDistance)
 			{
-				Floor hitComponent = hit[i].transform.GetComponent<Floor> ();
-				if (hitComponent != null && addedCount < viewDistance)
+				// something is interfering in the view of the enemy
+				if (hit.transform.tag.Equals ("Player") || hit.transform.tag.Equals ("Trail"))
 				{
-					addedCount++;
-					m_viewZone.Add (hitComponent);
+					// end the game if the thing was the player or its trail
+					iTween.Stop (gameObject);
+					playerOnSight = true;
+					if (alertUI != null)
+					{
+						alertUI.GetComponent<Text> ().text = hit.transform.tag.Equals ("Player") ?
+							"DON'T MOVE! WHO ARE YOU!!!???" :
+							"Someone peed on the floor, turn on the alarms.";
+						alertUI.SetActive (true);
+					}
+					m_gameManager.PlayerDetected ();
+					return;
 				}
 			}
 
-			// mark the tiles that are in the view zone of the enemy
-			DrawViewZone (true);
-
-			// check if the player is inside the view zone
-			foreach (Floor zone in m_viewZone)
+			// draw on screen only the tiles that the enemy can see
+			for (int i = 1; i <= visibleZones; i++)
 			{
-				if (zone.CheckPlayerOverlap ())
-				{
-					iTween.Stop (gameObject);
-					playerOnSight = true;
-					m_gameManager.PlayerDetected ();
-					break;
-				}
+				Vector3 position = Coordinate + (m_currentSpotTargetDir * i);
+				m_viewZone2[i - 1].transform.position = position;
+				m_viewZone2[i - 1].SetActive (true);
 			}
 		}
 	}
@@ -113,16 +131,9 @@ public class Enemy : MovingObject
 	// make the tiles that are being watched to change their color
 	void DrawViewZone (bool mark)
 	{
-		foreach (Floor zone in m_viewZone)
+		foreach (GameObject zone in m_viewZone2)
 		{
-			if (mark)
-			{
-				zone.SetColor (new Color (1f, 0f, 0f, 0.3f));
-			}
-			else
-			{
-				zone.ResetColor ();
-			}
+			zone.SetActive (mark);
 		}
 	}
 
@@ -130,6 +141,10 @@ public class Enemy : MovingObject
 	// will keep calling itself until the current level ends
 	public IEnumerator StartPatrolling ()
 	{
+		if (alertUI != null)
+		{
+			alertUI.SetActive (false);
+		}
 		if (m_patrolCoordinates.Count == 0 || playerOnSight || m_gameManager.IsGameOver)
 		{
 			// if the level has ended, stop patrolling
@@ -141,6 +156,7 @@ public class Enemy : MovingObject
 			if (!m_gameManager.IsGameOver)
 			{
 				m_currentSpotTarget = spotCoordinate;
+				m_currentSpotTargetDir = (m_currentSpotTarget - Coordinate).normalized;
 
 				// based on the type of the patrol, the enemy will walk between its spots
 				// or just look in their direction (without moving, without breathing)
@@ -163,6 +179,11 @@ public class Enemy : MovingObject
 	// stop any tween running on the GameObject
 	public void StopPatrolling ()
 	{
+		if (alertUI != null)
+		{
+			alertUI.SetActive (false);
+		}
+
 		iTween.Stop (gameObject);
 		DrawViewZone (false);
 	}
